@@ -4,6 +4,8 @@ use std::env;
 use std::process;
 use std::collections::HashMap;
 use std::path::Path;
+use std::path::PathBuf;
+use shellexpand;
 
 use clap::load_yaml;
 use clap::App;
@@ -30,28 +32,33 @@ struct Script {
     tags: Option<Vec<String>>,
 }
 
+
 fn main() {
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
 
-    let config = &mut load_config(&matches);
+    if let Some(path_str) = matches.value_of("config") {
+    };
 
-    match matches.value_of("INPUT") {
-        Some(alias) => {
-            // let arg = match sub_matches.value_of("arg") {
-            //     Some(arg) => String::from(arg),
-            //     None => String::from("")
-            // };
-            let arg = String::from("");
+    //let config = &mut load_config(&matches);
 
-            match fetch_script(alias, config) {
-                Some(script) => run_command(alias, &script.command, &arg),
-                None => println!("Invalid alias, would you like to create a new script?"),
-            }
-        },
-        None => handle_subcommands(&matches, config).expect("No input or subcommands"),
-    }    
+    //match matches.value_of("INPUT") {
+    //    Some(alias) => {
+    //        // let arg = match sub_matches.value_of("arg") {
+    //        //     Some(arg) => String::from(arg),
+    //        //     None => String::from("")
+    //        // };
+    //        let arg = String::from("");
+
+    //        match fetch_script(alias, config) {
+    //            Some(script) => run_command(alias, &script.command, &arg),
+    //            None => println!("Invalid alias, would you like to create a new script?"),
+    //        }
+    //    },
+    //    None => handle_subcommands(&matches, config).expect("No input or subcommands"),
+    //}    
 }
+
 
 fn handle_subcommands(matches: &clap::ArgMatches, config: & mut Config) -> Result<(),Error> {
     match matches.subcommand() {
@@ -168,10 +175,8 @@ fn run_command(alias: &str, command: &str, arg: &str) {
     println!("Script complete");
 }
 
-fn write_config(matches: &clap::ArgMatches, config: &Config) -> Result<(),Error> {
-    let config_dir = get_config_dir(matches);
-    
-    let mut file = File::create(&config_dir)?;
+fn write_config(config_path: &str, config: &Config) -> Result<(),Error> {
+    let mut file = File::create(config_path)?;
     
     let toml = toml::to_string(config).unwrap();
     file.write_all(toml.as_bytes())
@@ -180,17 +185,16 @@ fn write_config(matches: &clap::ArgMatches, config: &Config) -> Result<(),Error>
     Ok(())
 }
 
-fn load_config(matches: &clap::ArgMatches) -> Config {
+fn load_config(config_path: &str) -> Config {
     let mut config_string = String::new();
-    let config_dir = get_config_dir(matches);
     
-    match File::open(&config_dir) {
+    match File::open(config_path) {
         Ok(mut file) => {
             file.read_to_string(&mut config_string)
                 .expect("Failed to read config file contents");
         },
         Err(_error) => {
-            println!("Config file {} not found", &config_dir);
+            println!("Config file {} not found", &config_path);
             process::exit(1);
         },
     };
@@ -198,31 +202,27 @@ fn load_config(matches: &clap::ArgMatches) -> Config {
     toml::from_str(&config_string).unwrap()
 }
 
-fn get_config_dir(matches: &clap::ArgMatches) -> String {
-    if matches.is_present("config") {
-        matches.value_of("config").unwrap().to_string()
-    } else if let Ok(pier_config_path_env) = env::var("PIER_CONFIG_PATH") {
-        // Adds possibility of user defined config path.
-        pier_config_path_env
+fn file_exists(path_str: &str) -> bool{
+    Path::new(path_str).exists()
+}
+
+fn get_config_file(select_path: Option<&str>) -> String {
+    if let Some(path_str) = select_path {
+        return path_str.to_string()
     } else {
-        let home_dir = env::var("HOME").expect("$HOME variable not set");
-
-        let xdg_config_home_path = match env::var("XDG_CONFIG_HOME") {
-            Ok(config_dir) => format!("{}/pier/config", config_dir),
-            Err(_) => format!("{}/.config/pier/config", home_dir)
+        let xdg_config_home_path = match shellexpand::env("$XDG_CONFIG_HOME/pier/config") {
+            Ok(path) => path.to_string(),
+            Err(_) => shellexpand::tilde("~/.config/pier/config").to_string()
         };
+        let home_config_path = shellexpand::tilde("~/.pier").to_string();
 
-        let alternate_config_path = format!("{}/.pier", home_dir);
-
-        if Path::new(&xdg_config_home_path).exists() {
-            // Try using the XDG Base Directory standard if config path exists.
-            xdg_config_home_path
-        } else if Path::new(&alternate_config_path).exists() {
-            // Use the ~/.pier as a second choice of config path if it exists.
-            alternate_config_path
+        if file_exists(&xdg_config_home_path) {
+            return xdg_config_home_path
+        } else if file_exists(&home_config_path) {
+            return home_config_path
         } else {
-            // If no valid config file can be found use xdg_config_home_path as a last resort even if it doesn't exist 
-            xdg_config_home_path
+            return xdg_config_home_path
         }
+
     }
 }

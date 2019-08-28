@@ -5,6 +5,7 @@ authors = ["Benjamin Scholtz <bscholtz.bds@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+shellexpand = "1.0"
 clap = {version = "~2.27.0", features = ["yaml"]}
 toml = "0.4"
 serde = { version = '1.0.83', features = ['derive'] }
