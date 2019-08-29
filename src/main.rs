@@ -1,5 +1,7 @@
 use std::fs::File;
-use std::io::{prelude::*, Error};
+use std::io::{prelude::*};
+use std::io;
+use std::error::Error;
 use std::env;
 use std::process;
 use std::collections::HashMap;
@@ -32,13 +34,41 @@ struct Script {
     tags: Option<Vec<String>>,
 }
 
-
 fn main() {
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
-
-    let cfg_file = get_config_file(matches.value_of("config"));
     
+    if let Err(err) = try_main(matches) {
+        eprintln!("{}", err);
+        process::exit(1);
+    }
+
+
+}
+
+fn try_main(matches: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+    let cfg_file = get_config_file(matches.value_of("config"))?;
+    println!("cfg_file -> {}", cfg_file);
+   
+    let config = load_config(&cfg_file)
+        .map_err(|error| format!("Load config file {}: {}", cfg_file, error))?;
+
+    println!("PAST LOAD CONFIG");
+
+    //if let Err(err) = {
+    //    format!("Load config file {}: {}", cfg_file, error)
+    //    eprintln!("Failed to load config file {}:", err);
+    //    //.map_err(|error| format!("Load config file {}: {}", cfg_file, error))?;
+    //}
+    //let config = match load_config(&cfg_file) {
+    //    Ok(cfg) => Ok(cfg),
+    //    Err(err) => {
+    //        Err(format!("Load config file {}: {}", cfg_file, err))
+    //    }
+    //}?;
+    println!("config -> {:?}", config);
+
+    Ok(())
     //if let Some(path_str) =  {
     //};
 
@@ -187,27 +217,18 @@ fn main() {
 //    Ok(())
 //}
 //
-fn load_config(config_path: &str) -> Config {
+fn load_config(config_path: &str) -> Result<Config, Box<dyn Error>> {
     let mut config_string = String::new();
-    
-    match File::open(config_path) {
-        Ok(mut file) => {
-            file.read_to_string(&mut config_string)
-                .expect("Failed to read config file contents");
-        },
-        Err(_error) => {
-            panic!("Config file {} not found", &config_path);
-            process::exit(1);
-        },
-    };
+   
+    File::open(config_path)?.read_to_string(&mut config_string)?;
 
-    toml::from_str(&config_string).unwrap()
+    Ok(toml::from_str(&config_string)?)
 }
 
-fn get_config_file(select_path: Option<&str>) -> String {
+fn get_config_file(select_path: Option<&str>) -> Result<String, io::Error> {
     if let Some(path_str) = select_path {
         // If commandline argument passed or environment variable found.
-        return path_str.to_string()
+        return Ok(path_str.to_string())
     } else {
         // All possible default paths
         let paths: Vec<(&str, &str)> = vec![
@@ -223,12 +244,11 @@ fn get_config_file(select_path: Option<&str>) -> String {
                 let path = format!("{}/{}", e, relpath);
                 // If path exists return with config file path
                 if Path::new(&path).exists() {
-                    return path
+                    return Ok(path)
                 };
             };
         };
 
-        println!("No config files found.");
-        process::exit(1);
+        Err(io::Error::new(io::ErrorKind::NotFound, "No Config file found!"))
     }
 }
