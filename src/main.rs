@@ -37,8 +37,10 @@ fn main() {
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
 
-    if let Some(path_str) = matches.value_of("config") {
-    };
+    let cfg_file = get_config_file(matches.value_of("config"));
+    
+    //if let Some(path_str) =  {
+    //};
 
     //let config = &mut load_config(&matches);
 
@@ -60,131 +62,131 @@ fn main() {
 }
 
 
-fn handle_subcommands(matches: &clap::ArgMatches, config: & mut Config) -> Result<(),Error> {
-    match matches.subcommand() {
-        ("add", Some(sub_matches)) => {
-            let command = sub_matches.value_of("INPUT").unwrap();
-            let alias = sub_matches.value_of("alias").unwrap();
-           
-            let appendage = Script {
-                alias: alias.to_string(),
-                command: command.to_string(), 
-                description: None,
-                reference: None,
-                tags: None
-            };
-
-            match &config.scripts {
-                Some(_scripts) => {
-                    config.scripts.as_mut().unwrap()
-                        .entry(alias.to_string()).or_insert(appendage);
-                    write_config(&matches, &config)
-                        .expect("Failed to save config to file");
-                },
-                None => {
-                    let mut scripts = HashMap::new();
-                    scripts.insert(alias.to_string(), appendage);
-                    write_config(
-                        &matches, 
-                        &Config {
-                            scripts: Some(scripts)
-                        })
-                        .expect("Failed to save config to file");
-                }
-            }
-
-            println!("+ {} / alias {}", command, alias);
-        },
-        ("remove", Some(sub_matches)) => {
-            let alias = sub_matches.value_of("INPUT").unwrap();
-            let script: Script;
-
-            match &config.scripts {
-                Some(scripts) => {
-                    if scripts.contains_key(&alias.to_string()) {
-                        script = config.scripts.as_mut().unwrap()
-                            .remove(&alias.to_string())
-                            .expect("Failed to remove script");
-                        write_config(&matches, &config)
-                            .expect("Failed to save config to file");
-                    } else {
-                        println!("Invalid alias");
-                        process::exit(1);
-                    } 
-                },
-                None => {
-                    println!("Invalid alias");
-                    process::exit(1);
-                }
-            }
-
-            println!("- {:?} / alias {}", script, alias);
-        },
-        ("run", Some(sub_matches)) => {
-            let alias = sub_matches.value_of("INPUT").unwrap();
-            let arg = match sub_matches.value_of("arg") {
-                Some(arg) => String::from(arg),
-                None => String::from("")
-            };
-
-            match fetch_script(alias, config) {
-                Some(script) => run_command(alias, &script.command, &arg),
-                None => println!("Invalid alias, would you like to create a new script?"),
-            }
-        },
-        ("list", Some(_sub_matches)) => {
-            match &config.scripts {
-                Some(scripts) => {
-                    let mut table = Table::new();
-                    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                    table.set_titles(row!["Alias", "Command"]);
-                    for (alias, script) in scripts {
-                        table.add_row(row![alias, script.command]);
-                    }
-                    // Print the table to stdout
-                    table.printstd();
-                },
-                None => println!("No scripts exist. Would you like to add a new script?")
-            }
-        },
-        ("", None) => println!("No subcommand was used"),
-        _          => unreachable!(),
-    }
-
-    Ok(())
-}
-
-fn fetch_script<'a>(alias: &str, config: &'a Config) -> Option<&'a Script> {
-    return match &config.scripts {
-        Some(scripts) => {
-            scripts.get(&alias.to_string())
-        },
-        None => None
-    }
-}
-
-fn run_command(alias: &str, command: &str, arg: &str) {
-    println!("Starting script \"{}\"", alias);
-    println!("-------------------------");
-    
-    let default_shell = env::var("SHELL").expect("No default shell set!");
-    let output = cmd!(&format!("{} -c \"{} {}\"", default_shell, command, arg)).stdout_utf8().unwrap();
-    println!("{}", output);
-
-    println!("-------------------------");
-    println!("Script complete");
-}
-
-fn write_config(config_path: &str, config: &Config) -> Result<(),Error> {
-    let mut file = File::create(config_path)?;
-    
-    let toml = toml::to_string(config).unwrap();
-    file.write_all(toml.as_bytes())
-        .expect("Could not write to file!");
-    
-    Ok(())
-}
-
+//fn handle_subcommands(matches: &clap::ArgMatches, config: & mut Config) -> Result<(),Error> {
+//    match matches.subcommand() {
+//        ("add", Some(sub_matches)) => {
+//            let command = sub_matches.value_of("INPUT").unwrap();
+//            let alias = sub_matches.value_of("alias").unwrap();
+//           
+//            let appendage = Script {
+//                alias: alias.to_string(),
+//                command: command.to_string(), 
+//                description: None,
+//                reference: None,
+//                tags: None
+//            };
+//
+//            match &config.scripts {
+//                Some(_scripts) => {
+//                    config.scripts.as_mut().unwrap()
+//                        .entry(alias.to_string()).or_insert(appendage);
+//                    write_config(&matches, &config)
+//                        .expect("Failed to save config to file");
+//                },
+//                None => {
+//                    let mut scripts = HashMap::new();
+//                    scripts.insert(alias.to_string(), appendage);
+//                    write_config(
+//                        &matches, 
+//                        &Config {
+//                            scripts: Some(scripts)
+//                        })
+//                        .expect("Failed to save config to file");
+//                }
+//            }
+//
+//            println!("+ {} / alias {}", command, alias);
+//        },
+//        ("remove", Some(sub_matches)) => {
+//            let alias = sub_matches.value_of("INPUT").unwrap();
+//            let script: Script;
+//
+//            match &config.scripts {
+//                Some(scripts) => {
+//                    if scripts.contains_key(&alias.to_string()) {
+//                        script = config.scripts.as_mut().unwrap()
+//                            .remove(&alias.to_string())
+//                            .expect("Failed to remove script");
+//                        write_config(&matches, &config)
+//                            .expect("Failed to save config to file");
+//                    } else {
+//                        println!("Invalid alias");
+//                        process::exit(1);
+//                    } 
+//                },
+//                None => {
+//                    println!("Invalid alias");
+//                    process::exit(1);
+//                }
+//            }
+//
+//            println!("- {:?} / alias {}", script, alias);
+//        },
+//        ("run", Some(sub_matches)) => {
+//            let alias = sub_matches.value_of("INPUT").unwrap();
+//            let arg = match sub_matches.value_of("arg") {
+//                Some(arg) => String::from(arg),
+//                None => String::from("")
+//            };
+//
+//            match fetch_script(alias, config) {
+//                Some(script) => run_command(alias, &script.command, &arg),
+//                None => println!("Invalid alias, would you like to create a new script?"),
+//            }
+//        },
+//        ("list", Some(_sub_matches)) => {
+//            match &config.scripts {
+//                Some(scripts) => {
+//                    let mut table = Table::new();
+//                    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+//                    table.set_titles(row!["Alias", "Command"]);
+//                    for (alias, script) in scripts {
+//                        table.add_row(row![alias, script.command]);
+//                    }
+//                    // Print the table to stdout
+//                    table.printstd();
+//                },
+//                None => println!("No scripts exist. Would you like to add a new script?")
+//            }
+//        },
+//        ("", None) => println!("No subcommand was used"),
+//        _          => unreachable!(),
+//    }
+//
+//    Ok(())
+//}
+//
+//fn fetch_script<'a>(alias: &str, config: &'a Config) -> Option<&'a Script> {
+//    return match &config.scripts {
+//        Some(scripts) => {
+//            scripts.get(&alias.to_string())
+//        },
+//        None => None
+//    }
+//}
+//
+//fn run_command(alias: &str, command: &str, arg: &str) {
+//    println!("Starting script \"{}\"", alias);
+//    println!("-------------------------");
+//    
+//    let default_shell = env::var("SHELL").expect("No default shell set!");
+//    let output = cmd!(&format!("{} -c \"{} {}\"", default_shell, command, arg)).stdout_utf8().unwrap();
+//    println!("{}", output);
+//
+//    println!("-------------------------");
+//    println!("Script complete");
+//}
+//
+//fn write_config(config_path: &str, config: &Config) -> Result<(),Error> {
+//    let mut file = File::create(config_path)?;
+//    
+//    let toml = toml::to_string(config).unwrap();
+//    file.write_all(toml.as_bytes())
+//        .expect("Could not write to file!");
+//    
+//    Ok(())
+//}
+//
 fn load_config(config_path: &str) -> Config {
     let mut config_string = String::new();
     
@@ -194,7 +196,7 @@ fn load_config(config_path: &str) -> Config {
                 .expect("Failed to read config file contents");
         },
         Err(_error) => {
-            println!("Config file {} not found", &config_path);
+            panic!("Config file {} not found", &config_path);
             process::exit(1);
         },
     };
@@ -202,27 +204,31 @@ fn load_config(config_path: &str) -> Config {
     toml::from_str(&config_string).unwrap()
 }
 
-fn file_exists(path_str: &str) -> bool{
-    Path::new(path_str).exists()
-}
-
 fn get_config_file(select_path: Option<&str>) -> String {
     if let Some(path_str) = select_path {
+        // If commandline argument passed or environment variable found.
         return path_str.to_string()
     } else {
-        let xdg_config_home_path = match shellexpand::env("$XDG_CONFIG_HOME/pier/config") {
-            Ok(path) => path.to_string(),
-            Err(_) => shellexpand::tilde("~/.config/pier/config").to_string()
+        // All possible default paths
+        let paths: Vec<(&str, &str)> = vec![
+            ("XDG_CONFIG_HOME", "pier/config"),
+            ("XDG_CONFIG_HOME", "pier"),
+            ("HOME", ".config/pier/config"),
+            ("HOME", ".pier")
+        ];
+
+        for (env, relpath) in paths {
+            // If environment variable exists
+            if let Ok(e) = env::var(env) {
+                let path = format!("{}/{}", e, relpath);
+                // If path exists return with config file path
+                if Path::new(&path).exists() {
+                    return path
+                };
+            };
         };
-        let home_config_path = shellexpand::tilde("~/.pier").to_string();
 
-        if file_exists(&xdg_config_home_path) {
-            return xdg_config_home_path
-        } else if file_exists(&home_config_path) {
-            return home_config_path
-        } else {
-            return xdg_config_home_path
-        }
-
+        println!("No config files found.");
+        process::exit(1);
     }
 }
