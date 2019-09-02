@@ -8,9 +8,11 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use shellexpand;
-
+use std::fmt;
 use clap::load_yaml;
 use clap::App;
+
+use simple_error::SimpleError;
 
 #[macro_use] extern crate prettytable;
 use prettytable::{Table, Row, Cell, format};
@@ -30,10 +32,52 @@ struct Config {
 #[derive(Serialize, Deserialize, Debug)]
 struct Script {
     alias: String,
-    command: String,
+    command: Option<String>,
     description: Option<String>,
     reference: Option<String>,
     tags: Option<Vec<String>>,
+}
+
+macro_rules! err {
+    ($message:expr) => {
+        return Err(Box::new(SimpleError::new($message)))
+    }
+}
+
+//fn fetch_script<'a>(alias: &str, config: &'a Config) -> Option<&'a Script> {
+//    return match &config.scripts {
+//        Some(scripts) => {
+//            scripts.get(&alias.to_string())
+//        },
+//        None => None
+//    }
+//}
+
+impl Script {
+    fn add(self, config: &mut Config) -> Result<()> {
+        match config.scripts {
+            Some(ref mut scripts) => {
+                scripts.entry(String::from(&self.alias)).or_insert(self);
+                Ok(())}
+            None => Err("")?
+        }
+        
+    }
+
+    fn remove(self, alias: &str, config: &mut Config) -> Result<()> {
+        match config.scripts {
+            Some(ref mut scripts) => {
+                match scripts.remove(&self.alias) {
+                    Some(_removed) => Ok(()),
+                    None => Err("")?
+                    }
+                }
+            None => err!("No command found by that alias")
+        }
+        
+    }
+}
+impl Config {
 }
 
 fn main() {
@@ -188,14 +232,6 @@ fn try_main(matches: clap::ArgMatches) -> Result<()> {
 //    Ok(())
 //}
 //
-//fn fetch_script<'a>(alias: &str, config: &'a Config) -> Option<&'a Script> {
-//    return match &config.scripts {
-//        Some(scripts) => {
-//            scripts.get(&alias.to_string())
-//        },
-//        None => None
-//    }
-//}
 
 
 //fn run_command(alias: &str, command: &str, arg: &str) {
