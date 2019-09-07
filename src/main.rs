@@ -27,12 +27,13 @@ type Result<T> = ::std::result::Result<T, Box<dyn Error>>;
 #[derive(Serialize, Deserialize, Debug)]
 struct Config {
     scripts: Option<HashMap<String, Script>>,
+    path: String
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Script {
     alias: String,
-    command: Option<String>,
+    command: String,
     description: Option<String>,
     reference: Option<String>,
     tags: Option<Vec<String>>,
@@ -52,32 +53,94 @@ macro_rules! err {
 //        None => None
 //    }
 //}
+//fn run_command(alias: &str, command: &str, arg: &str) {
+//    println!("Starting script \"{}\"", alias);
+//    println!("-------------------------");
+//    
+//    let default_shell = env::var("SHELL").expect("No default shell set!");
+//    let output = cmd!(&format!("{} -c \"{} {}\"", default_shell, command, arg)).stdout_utf8().unwrap();
+//    println!("{}", output);
+//
+//    println!("-------------------------");
+//    println!("Script complete");
+//}
 
 impl Script {
-    fn add(self, config: &mut Config) -> Result<()> {
-        match config.scripts {
+    fn run(&self, arg: &str) -> Result<()> {
+        println!("Starting script \"{}\"", &self.alias);
+        println!("-------------------------");
+
+        let default_shell = env::var("SHELL").expect("No default shell set!");
+        match cmd!(&format!("{} -c \"{} {}\"", default_shell, &self.command, &arg)).stdout_utf8() {
+            Ok(output) => { 
+                println!("{}", output);
+                println!("-------------------------");
+                println!("Script complete successfully.");
+                Ok(())
+            }
+            Err(why) => {
+                err!(format!("Command failed: {:?}", why))
+            }
+        }
+    }
+
+}
+impl Config {
+    fn fetch_script(&mut self, alias: &str) -> Result<&Script> {
+        match &self.scripts {
+            Some(ref scripts) => {
+                match &scripts.get(&alias.to_string()) {
+                    Some(script) => Ok(script),
+                    None => err!("Invalid alias, would you like to create a new script?")
+                }
+                
+            }
+            None => err!("No scripts found, would you like to create a new script?") 
+        }
+    }
+    fn add_script(&mut self, script: Script) -> Result<()> {
+        match self.scripts {
             Some(ref mut scripts) => {
-                scripts.entry(String::from(&self.alias)).or_insert(self);
+                scripts.entry(String::from(&script.alias)).or_insert(script);
                 Ok(())}
             None => Err("")?
         }
         
     }
 
-    fn remove(self, alias: &str, config: &mut Config) -> Result<()> {
-        match config.scripts {
+    fn remove_script(&mut self, script: Script, alias: &str) -> Result<()> {
+        match self.scripts {
             Some(ref mut scripts) => {
-                match scripts.remove(&self.alias) {
+                match scripts.remove(&script.alias) {
                     Some(_removed) => Ok(()),
                     None => Err("")?
                     }
                 }
-            None => err!("No command found by that alias")
+            None => err!("Alias can't be found, nothing to delete.")
         }
-        
     }
-}
-impl Config {
+
+    fn write(&self) -> Result<()> {
+        let mut file = File::create(self.path)?;
+        let toml = toml::to_string(&self).unwrap();
+        file.write_all(toml.as_bytes())
+            .expect("Could not write to file!"); 
+        Ok(())
+    }
+    //
+    fn load(config_path: &str) -> Result<Config> {
+        let mut config_string = String::new();
+       
+        File::open(config_path)?.read_to_string(&mut config_string)?;
+    
+        let config = Config {
+            path: config_path.to_string(),
+            scripts: toml::from_str(&config_string)?
+        };
+
+        Ok(config)
+
+    }
 }
 
 fn main() {
@@ -96,8 +159,8 @@ fn try_main(matches: clap::ArgMatches) -> Result<()> {
     let cfg_file = get_config_file(matches.value_of("config"))?;
     println!("cfg_file -> {}", cfg_file);
    
-    let config = load_config(&cfg_file)
-        .map_err(|error| format!("Load config file {}: {}", cfg_file, error))?;
+    //let config = load_config(&cfg_file)
+        //.map_err(|error| format!("Load config file {}: {}", cfg_file, error))?;
 
     println!("PAST LOAD CONFIG");
 
@@ -247,22 +310,6 @@ fn try_main(matches: clap::ArgMatches) -> Result<()> {
 //}
 
 
-fn write_config(config_path: &str, config: &Config) -> Result<()> {
-    let mut file = File::create(config_path)?;
-    
-    let toml = toml::to_string(config).unwrap();
-    file.write_all(toml.as_bytes())
-        .expect("Could not write to file!"); 
-    Ok(())
-}
-//
-fn load_config(config_path: &str) -> Result<Config> {
-    let mut config_string = String::new();
-   
-    File::open(config_path)?.read_to_string(&mut config_string)?;
-
-    Ok(toml::from_str(&config_string)?)
-}
 
 fn get_config_file(select_path: Option<&str>) -> Result<String> {
     if let Some(path_str) = select_path {
