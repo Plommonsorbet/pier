@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::{prelude::*};
-use std::io;
 use std::error::Error;
 use std::env;
 use std::process;
@@ -8,7 +7,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use clap::load_yaml;
 use clap::App;
-
+#[macro_use] extern crate failure;
 use simple_error::SimpleError;
 
 #[macro_use] extern crate prettytable;
@@ -18,6 +17,26 @@ use prettytable::{Table, Row, Cell, format};
 
 use toml;
 use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Fail)]
+enum PierError {
+    #[fail(display = "Invalid alias, no scripts found for '{}'!", alias)]
+    InvalidAlias {
+        alias: String
+    },
+    
+    #[fail(display = "Config file not found!")]
+    ConfigFileNotFound,
+
+    #[fail(display = "No scripts found, would you like to create a new script?")]
+    NoScriptsFound,
+    
+    #[fail(display = "Command failed: \n{}", output)]
+    CommandFailed {
+        output: String
+    }
+
+}
 
 type Result<T> = ::std::result::Result<T, Box<dyn Error>>;
 
@@ -39,9 +58,12 @@ struct Script {
 }
 
 macro_rules! err {
-    ($message:expr) => {
-        return Err(Box::new(SimpleError::new($message)))
-    }
+    ($msg:expr) => {
+        return Err(Box::new(SimpleError::new($msg)))
+    };
+    ($msg:expr, $($arg:tt)*) => {
+        return Err(Box::new(SimpleError::new(format_args!($msg, "\n", $(arg)*))))
+    };
 }
 
 
@@ -66,14 +88,8 @@ impl Script {
 
 }
 impl Config {
-    fn new(config_path: &str) -> Config {
-        Config {
-            scripts: Some(HashMap::new()),
-            path: config_path.to_string()
-        }
-    }
-    fn fetch_script(self, alias: &str) -> Result<&Script> {
-        match &self.scripts {
+    fn fetch_script(&self, alias: &str) -> Result<&Script> {
+        match self.scripts {
             Some(ref scripts) => {
                 match &scripts.get(&alias.to_string()) {
                     Some(script) => Ok(script),
@@ -89,7 +105,14 @@ impl Config {
             Some(ref mut scripts) => {
                 scripts.entry(String::from(&script.alias)).or_insert(script);
                 Ok(())}
-            None => Err("")?
+
+            None => {
+                let mut scripts = HashMap::new();
+                scripts.insert(String::from(&script.alias), script);
+
+                self.scripts = Some(scripts);
+                Ok(())
+            }
         }
         
     }
@@ -99,16 +122,18 @@ impl Config {
             Some(ref mut scripts) => {
                 match scripts.remove(alias) {
                     Some(_removed) => Ok(()),
-                    None => Err("")?
+                    None => err!("Alias can't be found, nothing to delete.")
                     }
                 }
-            None => err!("Alias can't be found, nothing to delete.")
+            None => err!("No scripts found, would you like to create a new script?") 
         }
     }
 
-    fn list_scripts(&self) -> Result<()> {
+    fn list_scripts(&self) -> ::std::result::Result<(), PierError>  {
+    //fn list_scripts(&self) -> Result<()> {
         match self.scripts {
             Some(ref scripts) => {
+                return Err(PierError::InvalidAlias { alias: "test".to_string()});
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
                 table.set_titles(row!["Alias", "Command"]);
@@ -117,7 +142,9 @@ impl Config {
                 }
                 // Print the table to stdout
                 table.printstd();
-            }, None => err!("No scripts exist. Would you like to add a new script?") }
+            }
+            None => return Err(PierError::NoScriptsFound) }
+            //None => err!("No scripts exist. Would you like to add a new script?") }
         Ok(())
     }
 
@@ -129,7 +156,7 @@ impl Config {
         Ok(())
     }
 
-    fn load(config_path: &str) -> Result<Config> {
+    fn from(config_path: &str) -> Result<Config> {
         let mut config_string = String::new();
        
         File::open(config_path)?.read_to_string(&mut config_string)?;
@@ -153,17 +180,8 @@ fn main() {
 
 fn try_main(matches: clap::ArgMatches) -> Result<()> {
     let cfg_file = get_config_file(matches.value_of("config"))?;
-    println!("cfg_file -> {}", cfg_file);
    
-    let config = Config::load(&cfg_file)?;
-    println!("PAST LOAD CONFIG: {:?}", config);
-
-    println!("config -> {:?}", config);
-
-    //if let Some(path_str) =  {
-    //};
-
-    //let config = &mut load_config(&matches);
+    let config = Config::from(&cfg_file)?;
 
     match matches.value_of("INPUT") {
         Some(alias) => {
@@ -178,7 +196,7 @@ fn try_main(matches: clap::ArgMatches) -> Result<()> {
     Ok(())
 }
 
-fn handle_subcommands(matches: &clap::ArgMatches, config: Config) -> Result<()> {
+fn handle_subcommands(matches: &clap::ArgMatches, mut config: Config) -> Result<()> {
     match matches.subcommand() {
         ("add", Some(sub_matches)) => {
             let appendage = Script {
@@ -206,10 +224,11 @@ fn handle_subcommands(matches: &clap::ArgMatches, config: Config) -> Result<()> 
             script.run(arg)?;
         }
         ("list", Some(_sub_matches)) => {
-            config.list_scripts()?;
-        }
-        ("", None) => {
-            err!("No scripts exist. Would you like to add a new script?")
+            //config.list_scripts()?;
+            if let Err(e) = config.list_scripts() {
+                println!("ERR:\n{}", e);
+                process::exit(1);
+            }
         }
         _ => unreachable!()
     };
@@ -219,7 +238,7 @@ fn handle_subcommands(matches: &clap::ArgMatches, config: Config) -> Result<()> 
 
 fn get_config_file(select_path: Option<&str>) -> Result<String> {
     if let Some(path_str) = select_path {
-        // If commandline argument passed or environment variable found.
+        // return commandline argument passed or default environment variable found.
         return Ok(path_str.to_string())
     } else {
         // All possible default paths
@@ -241,6 +260,6 @@ fn get_config_file(select_path: Option<&str>) -> Result<String> {
             };
         };
 
-        Err(io::Error::new(io::ErrorKind::NotFound, "No Config file found!"))?
+        err!("No Config file found!")
     }
 }
