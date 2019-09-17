@@ -4,7 +4,7 @@ use std::error::Error;
 use std::env;
 use std::collections::HashMap;
 use std::path::Path;
-
+use snafu::{ResultExt};
 mod error;
 use error::*;
 
@@ -14,7 +14,7 @@ use shell;
 use toml;
 use serde::{Serialize, Deserialize};
 
-pub type Result<T> = ::std::result::Result<T, Box<dyn Error>>;
+pub type Result<T, E = PierError> = ::std::result::Result<T, E>;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -24,7 +24,7 @@ pub struct Config {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Script {
+pub struct Script {
     alias: String,
     command: String,
     description: Option<String>,
@@ -123,10 +123,9 @@ impl Config {
 
     pub fn from(config_path: &str) -> Result<Config> {
         let mut config_string = String::new();
-       
-        File::open(config_path)?.read_to_string(&mut config_string)?;
+        File::open(config_path).context(PierError::ConfigReadError { path: config_path.to_string() })?.read_to_string(&mut config_string)?;
 
-        Ok(toml::from_str(&config_string)?)
+        Ok(toml::from_str(&config_string).context(PierError::ConfigParseError { path: config_path.to_string() } )?)
 
     }
 }

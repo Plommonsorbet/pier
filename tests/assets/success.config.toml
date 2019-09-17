@@ -1,6 +1,5 @@
 [scripts.read-poem-from-file]
 alias = "read-poem"
-description = "This commands reads a poem from poem.txt"
 command = "cat tests/assets/poem.txt"
 
 [scripts.print-env-var]
@@ -9,5 +8,5 @@ command = "echo $MYVAR"
 
 [scripts.touch-tmp]
 alias = "touch-tmp"
-description = "This command creates a temporary file.
+description = "This command creates a temporary file."
 command = "touch test.tmp"
