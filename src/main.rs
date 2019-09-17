@@ -1,4 +1,4 @@
-use pier::{Result, Config, get_config_file, handle_subcommands};
+use pier::{Result, Config, get_config_file, handle_subcommands, PierError};
 use clap::load_yaml;
 use clap::App;
 use std::process;
@@ -15,12 +15,12 @@ fn main() {
 
 }
 
-fn try_main(matches: clap::ArgMatches) -> Result<()> {
+fn try_main(matches: clap::ArgMatches) -> std::result::Result<(), PierError> {
     let cfg_file = get_config_file(matches.value_of("config"))?;
    
-    let config = Config::from(&cfg_file)?;
+    let config = Config::from(&cfg_file).expect("failed to add script (TMP)");
 
-    handle_subcommands(&matches, config)?;
+    handle_subcommands(&matches, config).expect("failed to add script (TMP)");
     //match matches.value_of("INPUT") {
     //    Some(alias) => {
     //        let arg = "";

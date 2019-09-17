@@ -1,18 +1,70 @@
 use std::fs::File;
 use std::io::{prelude::*};
-use std::error::Error;
+use snafu::{ensure, Backtrace, ErrorCompat, ResultExt, Snafu};
 use std::env;
 use std::collections::HashMap;
 use std::path::Path;
-use snafu::{ResultExt};
-mod error;
-use error::*;
+//use snafu::{ResultExt};
+//mod error;
+//use error::*;
 
 use prettytable::{Table, row, cell, format};
 use shell;
 
-use toml;
+//use toml;
 use serde::{Serialize, Deserialize};
+//use snafu::{Snafu, ResultExt, ErrorCompat, IntoError};
+use snafu;
+//use std::io;
+//use std::error;
+use toml;
+
+
+#[derive(Snafu, Debug)]
+pub struct PierError(InnerPierError);
+
+#[derive(Snafu, Debug)]
+enum InnerPierError {
+    #[snafu(display("error on {}: No scripts found for the alias.", "remove"))]
+    AliasNotFound { action: &'static str },
+    
+    #[snafu(display("error: No config file found."))]
+    ConfigFileNotFound { something: &'static str },
+    
+    //#[snafu(display("error: Unable to parse config from {}: {}", path, source))]
+    //ConfigParseError {
+    //    source: toml::de::Error,
+    //    path: String
+    //},
+
+    #[snafu(display("error: Read error from {}: ", path))]
+    ConfigReadError {
+        source: std::io::Error,
+        path: String
+    },
+
+    #[snafu(display("error: Write error from {}:", path))]
+    ConfigWriteError {
+        source: std::io::Error,
+        path: String
+    },
+
+    #[snafu(display("error: No scripts found."))]
+    NoScriptsFound,
+    
+    #[snafu(display("error: Command failed: \n{:?}", why))]
+    CommandFailed {
+        why: shell::ShellError
+    }
+}
+
+
+#[macro_export]
+macro_rules! pier_err {
+    ($type:expr) => {
+        return Err($type)?
+    };
+}
 
 pub type Result<T, E = PierError> = ::std::result::Result<T, E>;
 
@@ -48,7 +100,7 @@ impl Script {
                 Ok(())
             }
             Err(why) => {
-                pier_err!(PierError::CommandFailed{ why })
+                pier_err!(InnerPierError::CommandFailed{ why })
             }
         }
     }
@@ -60,11 +112,11 @@ impl Config {
             Some(ref scripts) => {
                 match &scripts.get(&alias.to_string()) {
                     Some(script) => Ok(script),
-                    None => pier_err!(PierError::AliasNotFound { action: "fetch" })
+                    None => pier_err!(InnerPierError::AliasNotFound { action: "fetch" })
                 }
                 
             }
-            None => pier_err!(PierError::NoScriptsFound) 
+            None => pier_err!(InnerPierError::NoScriptsFound) 
         }
     }
     fn add_script(&mut self, script: Script) -> Result<()> {
@@ -89,10 +141,10 @@ impl Config {
             Some(ref mut scripts) => {
                 match scripts.remove(alias) {
                     Some(_removed) => Ok(()),
-                    None => pier_err!(PierError::AliasNotFound { action: "remove" })
+                    None => pier_err!(InnerPierError::AliasNotFound { action: "remove" })
                     }
                 }
-            None => pier_err!(PierError::NoScriptsFound) 
+            None => pier_err!(InnerPierError::NoScriptsFound) 
         }
     }
 
@@ -108,24 +160,24 @@ impl Config {
                 // Print the table to stdout
                 table.printstd();
             }
-            None => pier_err!(PierError::NoScriptsFound)
+            None => pier_err!(InnerPierError::NoScriptsFound)
             }
         Ok(())
     }
 
     fn write(&self) -> Result<()> {
-        let mut file = File::create(&self.path)?;
-        let toml = toml::to_string(&self.scripts)?;
-        file.write_all(toml.as_bytes())?;
+        let mut file = File::create(&self.path).context(ConfigWriteError { path: &self.path.to_string() })?;
+        let toml = toml::to_string(&self.scripts).expect("toml err");
+        file.write_all(toml.as_bytes()).context(ConfigWriteError { path: &self.path.to_string() });
 
         Ok(())
     }
 
-    pub fn from(config_path: &str) -> Result<Config> {
+    pub fn from(path: &str) -> std::result::Result<Config, std::io::Error> {
         let mut config_string = String::new();
-        File::open(config_path).context(PierError::ConfigReadError { path: config_path.to_string() })?.read_to_string(&mut config_string)?;
+        File::open(path)?.read_to_string(&mut config_string)?;
 
-        Ok(toml::from_str(&config_string).context(PierError::ConfigParseError { path: config_path.to_string() } )?)
+        Ok(toml::from_str(&config_string).expect("Failed to parse"))
 
     }
 }
@@ -155,8 +207,8 @@ pub fn get_config_file(select_path: Option<&str>) -> Result<String> {
             };
         };
 
-        pier_err!(PierError::ConfigFileNotFound);
-    }
+        pier_err!(InnerPierError::ConfigFileNotFound {something: "lol" });
+    };
 }
 
 pub fn handle_subcommands(matches: &clap::ArgMatches, mut config: Config) -> Result<()> {
@@ -172,31 +224,31 @@ pub fn handle_subcommands(matches: &clap::ArgMatches, mut config: Config) -> Res
                 tags: None
             };
 
-            config.add_script(appendage)?;
-            config.write()?;
+            config.add_script(appendage).expect("failed to add script (TMP)");
+            config.write().context(ConfigWriteError { path: config.path.to_string() })?;
         }
         ("remove", Some(sub_matches)) => {
             let alias = sub_matches.value_of("INPUT").unwrap();
-            config.remove_script(&alias)?;
+            config.remove_script(&alias).expect("failed to add script (TMP)");
             config.write()?;
             
         }
         ("run", Some(sub_matches)) => {
             let arg = "";
             let alias = sub_matches.value_of("INPUT").unwrap();
-            let script = config.fetch_script(&alias)?;
+            let script = config.fetch_script(&alias).expect("failed to add script (TMP)");
 
-            script.run(arg)?;
+            script.run(arg).expect("failed to add script (TMP)");
         }
         ("list", Some(_sub_matches)) => {
-            config.list_scripts()?;
+            config.list_scripts().expect("failed to add script (TMP)");
         },
         _ => {
             println!("woo");
             let arg = "";
             let alias = matches.value_of("INPUT").unwrap();
-            let script = config.fetch_script(&alias)?;
-            script.run(arg)?;
+            let script = config.fetch_script(&alias).expect("failed to add script (TMP)");
+            script.run(arg).expect("failed to add script (TMP)");
 
         }
     };
