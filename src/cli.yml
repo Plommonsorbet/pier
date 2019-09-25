@@ -4,6 +4,7 @@ author: Benjamin Scholtz <bscholtz.bds@gmail.com>
 about: A simple Docker script management CLI
 settings:
   - ArgRequiredElseHelp
+  - SubcommandsNegateReqs
 args:
     - INPUT:
         help: alias/name for script to run
