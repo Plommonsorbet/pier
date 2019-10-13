@@ -88,7 +88,7 @@ macro_rules! pier_test {
     };
 }
 
-pier_test!(config => SUCCESS_CONFIG, test_case_1, arg => "list"; | mut te: TestEnv | {
+pier_test!(config => SUCCESS_CONFIG, test_case_1, | mut te: TestEnv | {
     te.cmd.arg("list");
     te.cmd.assert().success();
     
