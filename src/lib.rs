@@ -1,20 +1,19 @@
-use std::path::Path;
-use std::path::PathBuf;
-use std::fs::File;
-use std::io::prelude::*;
-use std::env;
 use prettytable::{cell, format, row, Table};
-use snafu::{OptionExt, ResultExt};
 use serde::{Deserialize, Serialize};
 use shell;
-use toml;
+use snafu::{OptionExt, ResultExt};
 use std::collections::HashMap;
+use std::env;
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::Path;
+use std::path::PathBuf;
+use toml;
 
 pub mod pier_error;
 use pier_error::*;
 
 pub type Result<T, E = pier_error::PierError> = ::std::result::Result<T, E>;
-
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -24,23 +23,28 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(path: &str) -> Config {
+    pub fn new(path: &Path) -> Config {
         Config {
             scripts: HashMap::new(),
-            path: PathBuf::from(path)
+            path: path.into(),
         }
-
     }
+
+    pub fn new_config(path: &Path) -> Result<Config> {
+        let config = Config::new(path);
+        config.write()?;
+        Ok(config)
+    }
+
     pub fn write(&self) -> Result<()> {
         let mut file = File::create(&self.path).context(ConfigWrite { path: &self.path })?;
-        let toml = toml::to_string(&self).context(TomlSerialize)?;
+        let toml = toml::to_string_pretty(&self).context(TomlSerialize)?;
         file.write_all(toml.as_bytes())
             .context(ConfigWrite { path: &self.path })?;
-
         Ok(())
     }
 
-    pub fn from(path: PathBuf) -> Result<Config> {
+    pub fn load(path: &Path) -> Result<Config> {
         let mut config_string = String::new();
         File::open(&path)
             .context(ConfigRead { path: &path })?
@@ -50,19 +54,19 @@ impl Config {
         let mut config: Config =
             toml::from_str(&config_string).context(TomlParse { path: &path })?;
 
-        config.path = path;
+        config.path = path.into();
 
         Ok(config)
     }
 
-    pub fn from_input(input: Option<&str>) -> Result<Config> {
-        let path = Config::get_config_path(input)?;
-        Ok(Config::from(path)?)
-    }
-
-    pub fn get_config_path(selected_path: Option<&str>) -> Result<PathBuf> {
+    pub fn from_input(selected_path: Option<&str>) -> Result<Config> {
         if let Some(path_str) = selected_path {
-            return Ok(PathBuf::from(path_str))
+            let path = Path::new(path_str);
+            if path.exists() {
+                return Ok(Config::load(path)?);
+            } else {
+                return Ok(Config::new_config(path)?)
+            }
         } else {
             // All possible default paths
             let paths: Vec<(&str, &str)> = vec![
@@ -70,7 +74,7 @@ impl Config {
                 ("HOME", ".config/pier/config"),
                 ("HOME", ".pier"),
             ];
-    
+
             for (env, relpath) in paths {
                 // If environment variable exists
                 if let Ok(e) = env::var(env) {
@@ -78,14 +82,15 @@ impl Config {
                     // If path exists return with config file path
                     let path = Path::new(&path);
                     if path.exists() {
-                        return Ok(path.to_path_buf());
+                        return Ok(Config::load(path)?)
                     };
                 };
-            };
-    
+            }
+
             pier_err!(InnerPierError::NoConfigFile)
         };
     }
+
     pub fn fetch_script(&self, alias: &str) -> Result<&Script> {
         Ok(self
             .scripts
@@ -103,7 +108,7 @@ impl Config {
 
     pub fn remove_script(&mut self, alias: &str) -> Result<()> {
         self.scripts
-            .get(&alias.to_string())
+            .remove(&alias.to_string())
             .context(AliasNotFound {
                 alias: &alias.to_string(),
             })?;
@@ -121,7 +126,6 @@ impl Config {
         table.printstd();
         Ok(())
     }
-
 }
 
 #[derive(Serialize, Deserialize, Debug)]

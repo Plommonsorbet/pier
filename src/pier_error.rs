@@ -8,45 +8,45 @@ pub struct PierError(InnerPierError);
 #[derive(Snafu, Debug)]
 #[snafu(visibility = "pub(crate)")]
 pub enum InnerPierError {
-    #[snafu(display("error: No script found by alias {}", alias))]
+    #[snafu(display("error: AliasNotFound: No script found by alias {}", alias))]
     AliasNotFound { alias: String },
 
-    #[snafu(display("error: No default config file found. See help for more info."))]
+    #[snafu(display("error NoConfigFile: No default config file found. See help for more info."))]
     NoConfigFile,
 
     #[snafu(display(
-        "error: Unable to serialize config: {}. Probably a bug in the code.",
+        "error TomlSerialize: Unable to serialize config: {}. Probably a bug in the code.",
         source
     ))]
     TomlSerialize { source: toml::ser::Error },
 
-    #[snafu(display("error: Unable to parse toml config from file {}: {}", path.display(), source))]
+    #[snafu(display("error TomlParse: Unable to parse toml config from file {}: {}", path.display(), source))]
     TomlParse {
         source: toml::de::Error,
         path: PathBuf,
     },
-    #[snafu(display("error: Unable to read config from file {}: {} ", path.display(), source))]
+    #[snafu(display("error ConfigRead: Unable to read config from file {}: {} ", path.display(), source))]
     ConfigRead {
         source: std::io::Error,
         path: PathBuf,
     },
 
-    #[snafu(display("error: Write error from {}: {}", path.display(), source))]
+    #[snafu(display("error ConfigWrite: Write error from {}: {}", path.display(), source))]
     ConfigWrite {
         source: std::io::Error,
         path: PathBuf,
     },
 
-    #[snafu(display("error: No scripts found."))]
+    #[snafu(display("error NoScriptsFound: No scripts found."))]
     NoScriptsFound,
 
-    #[snafu(display("error: Command failed: \n{:?}", why))]
+    #[snafu(display("error CommandFailed: Command failed: \n{:?}", why))]
     CommandFailed { why: shell::ShellError },
 
-    #[snafu(display("error: No default $SHELL: \n"))]
+    #[snafu(display("error NoDefaultShell: No default $SHELL: \n"))]
     NoDefaultShell { source: std::env::VarError },
 
-    #[snafu(display("error: Expected value for {} \n", name))]
+    #[snafu(display("error CliValueNotFound: Expected value for {} \n", name))]
     CliValueNotFound { name: &'static str },
 }
 
