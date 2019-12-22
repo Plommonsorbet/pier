@@ -35,45 +35,142 @@ Using **Nix** package manager:
 See `src/cli.yml` for a more detailed spec.
 
 ```
-pier 0.1.2
-Benjamin Scholtz
-A simple Docker script management CLI
+pier 0.1.3
+Benjamin Scholtz <bscholtz.bds@gmail.com>, Isak Johansson
+A simple script management CLI
 
 USAGE:
-    pier [FLAGS] [OPTIONS] <INPUT>
+    pier [FLAGS] [OPTIONS] <alias>
     pier [FLAGS] [OPTIONS] <SUBCOMMAND>
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-    -v, --verbose    The level of verbosity
+    -h, --help       
+            Prints help information
+
+    -V, --version    
+            Prints version information
+
+    -v, --verbose    
+            The level of verbosity
+
 
 OPTIONS:
-    -c, --config <FILE>    Sets a custom config file.
-                           
-                           DEFAULT PATH is otherwise determined in this order:
-                             - $PIER_CONFIG_PATH (environment variable if set)
-                             - pier.toml (in the current directory)
-                             - $XDG_CONFIG_HOME/pier/config.toml
-                             - $XDG_CONFIG_HOME/pier/config
-                             - $XDG_CONFIG_HOME/pier.toml
-                             - $HOME/.pier.toml
-                             - $HOME/.pier
-                            [env:PIER_CONFIG_PATH: ]
+    -c, --config-file <path>    
+            Sets a custom config file.
+            
+            DEFAULT PATH is otherwise determined in this order:
+            
+            - $PIER_CONFIG_PATH (environment variable if set)
+            
+            - pier.toml (in the current directory)
+            
+            - $XDG_CONFIG_HOME/pier/config.toml
+            
+            - $XDG_CONFIG_HOME/pier/config
+            
+            - $XDG_CONFIG_HOME/pier.toml
+            
+            - $HOME/.pier.toml
+            
+            - $HOME/.pier
+            
+             [env: PIER_CONFIG_PATH=]
 
 ARGS:
-    <INPUT>    alias/name for script to run
+    <alias>    
+            The alias or name for the script.
+
 
 SUBCOMMANDS:
-    add       Add a script using alias
+    add       Add a new script to config.
+    edit      Edit a script matching alias.
     help      Prints this message or the help of the given subcommand(s)
-    list      List all scripts with optional filters
-    remove    Remove a script using alias
-    run       Run script
+    list      alias: ls - List scripts
+    remove    alias: rm - Remove a script matching alias.
+    run       Run a script matching alias.
+    show      Show a script matching alias.
 
 ```
 
 `pier list`, `pier add "ip link set wlp58s0 down && sleep 5 && ip link set wlp58s0 up" --alias refresh-wifi`, `pier refresh-wifi`
+
+## Execute your pier scripts in any interpreted languages.
+Pier allows running your scripts in interpreted languages, this is done through one of two ways. Either by adding a shebang(`#!`) on the first line of a script (just like you would in a normal script), it also allows for a setting a fallback interpreter that will run inline in case the script has no shebang.
+
+### Shebang Python example
+```
+[scripts.run_python]
+alias = "run_python"
+command = '''
+#!/usr/bin/env python3
+import sys
+
+print("Running python with version {}".format(sys.version))
+
+'''
+```
+
+### Shebang Scriptisto example
+```
+[scripts.run_python]
+alias = "run_python"
+command = '''
+#!/usr/bin/env scriptisto
+
+// scriptisto-begin
+// script_src: src/main.rs
+// build_cmd: cargo build --release && strip ./target/release/script
+// target_bin: ./target/release/script
+// files:
+//  - path: Cargo.toml
+//    content: |
+//     package = { name = "script", version = "0.1.0", edition = "2018"}
+//     [dependencies]
+// scriptisto-end
+
+
+fn main() {
+    println!("This is a rust script!");
+}
+
+'''
+```
+
+### Using nodejs as default_interpreter
+```
+# Sets the default interpreter, the first item in the list should be the binary and the rest are the arguments for the interpreter cli option.
+default_interpreter = ["node", "-e"]
+
+# Runs as the fallback interpreter nodejs as it's lacking a shebang
+[scripts.hello_world_nodejs]
+alias = "hello_world_nodejs"
+command = '''
+console.log("Hello world!")
+
+'''
+
+# Runs as the fallback interpreter nodejs as it's lacking a shebang
+[scripts.count_to_ten]
+alias = "count_to_ten"
+command = '''
+const arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+for (let i of arr) {
+    console.log(i);
+}
+
+'''
+
+# This will be run as a posix sh script as it has a shebang
+[scripts.a_shell_script]
+alias = "a_shell_script"
+command = '''
+#!/bin/sh
+
+nohup st > /dev/null 2>&1&
+
+'''
+```
+
 
 ## Example `pier` TOML config
 

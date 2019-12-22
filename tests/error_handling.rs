@@ -1,9 +1,8 @@
+use crate::common::TestEnv;
 use assert_fs::fixture::ChildPath;
 use assert_fs::prelude::*;
-use pier::Config;
 use pier::error::*;
-use crate::common::TestEnv;
-
+use pier::Config;
 
 // Tests that it returns the error AliasNotFound if the alias given does not exist
 pier_test!(lib => test_error_alias_not_found, cfg => r#"
@@ -23,11 +22,11 @@ pier_test!(lib => test_error_no_scripts_exists, cfg => r#""#,
     err_eq!(lib.list_scripts(None), NoScriptsExists);
 });
 
-// Tests that it returns the error ConfigRead if the file cannot be read. 
+// Tests that it returns the error ConfigRead if the file cannot be read.
 // In this case the file is not created
 pier_test!(basic => test_config_read_error, | te: TestEnv | {
     let path = te.join_root("non_existant_file");
-    let lib = Config::from_input(Some(&path));
+    let lib = Config::from_input(Some(path));
     err_eq!(lib, ConfigRead);
 });
 
@@ -49,6 +48,6 @@ pier_test!(basic => test_toml_parse_error, | te: TestEnv| {
         "#)
     ).expect("Unable to write to file");
 
-    let lib = Config::from_file(cfg.path());
+    let lib = Config::from_file(cfg.path().to_path_buf());
     err_eq!(lib, TomlParse);
 });
